@@ -1,0 +1,7 @@
+﻿.venv/
+.memoire_ui_verification_*/
+**/__pycache__/
+*.py[cod]
+**/*.db
+cyber-reponse/.etat_*.json
+cyber-reponse/wazuh_alerts.json
