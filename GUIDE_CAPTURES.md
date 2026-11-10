@@ -1,5 +1,7 @@
 # GUIDE COMPLET — LANCER LA DÉMO ET FAIRE LES CAPTURES
 
+> Numérotation des figures alignée sur le mémoire déjà soumis : Figure 4 = tableau de bord, Figure 5 = incident critique déplié, Figure 6 = environnement, Figure 7 = résultat d'un scénario de test.
+
 Projet : C:\Users\Mr-G\Documents\1MEMOIRESI 2026\cyber-reponse
 Identifiants du tableau de bord : identifiant = admin , mot de passe = esgis2026
 Pour capturer : touche Windows + Maj + S, sélectionne la zone (elle est copiée), puis Ctrl + V dans Word sur le bandeau jaune de la figure.
@@ -55,11 +57,11 @@ Ouvre une dernière fenêtre PowerShell. Tape :
 Cette fenêtre servira à lancer les attaques réseau.
 
 ====================================================================
-CAPTURE >>> FIGURE 5 : ENVIRONNEMENT DE MISE EN ŒUVRE
+CAPTURE >>> FIGURE 6 : ENVIRONNEMENT DE MISE EN ŒUVRE
 ====================================================================
 Quand les 5 fenêtres tournent, place côte à côte les fenêtres Suricata (2),
 Collecteur (3) et Ubuntu/Wazuh (1), et fais une capture d'ensemble.
-=> C'est la FIGURE 5.
+=> C'est la FIGURE 6.
 
 ====================================================================
 PARTIE 2 — LES ATTAQUES (une par une) + CAPTURES
@@ -78,9 +80,9 @@ Dans la FENÊTRE 5, tape :
 Résultat attendu : un incident CRITIQUE (rouge) avec une réponse automatique réversible
 et un bouton "Annuler l'action".
 
->>> CAPTURE FIGURE 4 : clique sur cet incident critique pour le DÉPLIER
+>>> CAPTURE FIGURE 5 : clique sur cet incident critique pour le DÉPLIER
 (on doit voir : la gravité critique, "réponse automatique", et le bouton "Annuler l'action").
-=> C'est la FIGURE 4.
+=> C'est la FIGURE 5.
 
 --- ATTAQUE 3 : SCAN DE PORTS — gravité ÉLEVÉE, alerte humaine ---
 Dans la FENÊTRE 5, tape :
@@ -106,23 +108,23 @@ d'une minute, c'est que Wazuh ne détecte pas ce cas chez toi : dans ce cas,
 n'utilise pas la backdoor comme scénario (on reviendra à 8 scénarios).
 
 ====================================================================
-CAPTURE >>> FIGURE 3 : TABLEAU DE BORD (vue d'ensemble)
+CAPTURE >>> FIGURE 4 : TABLEAU DE BORD (vue d'ensemble)
 ====================================================================
 Après avoir lancé plusieurs attaques, capture la LISTE complète des incidents
 (vue d'ensemble du tableau de bord, sans rien déplier).
-=> C'est la FIGURE 3.
+=> C'est la FIGURE 4.
 
 ====================================================================
-CAPTURE >>> FIGURE 6 : RÉSULTAT D'UN SCÉNARIO DE TEST
+CAPTURE >>> FIGURE 7 : RÉSULTAT D'UN SCÉNARIO DE TEST
 ====================================================================
 Déplie un incident (par exemple le ping ou le scan) pour montrer le détail :
 gravité, explication en langage clair, et recommandation.
-=> C'est la FIGURE 6.
+=> C'est la FIGURE 7.
 
 ====================================================================
 PARTIE 3 — MONTRER LA RÉVERSIBILITÉ (pour la soutenance)
 ====================================================================
-Sur l'incident critique de force brute (Figure 4), le bouton "Annuler l'action"
+Sur l'incident critique de force brute (Figure 5), le bouton "Annuler l'action"
 permet d'annuler la réponse automatique. Tu peux le cliquer pour montrer que
 l'action est réversible (utile si le jury demande une démo en direct).
 
@@ -137,7 +139,7 @@ RAPPEL — INSÉRER UNE CAPTURE DANS LE MÉMOIRE (Word)
 La légende (Figure 3 : ...) est déjà écrite juste en dessous : n'y touche pas.
 
 RÉCAP DES 4 FIGURES À PRODUIRE :
-- Figure 3 : vue d'ensemble du tableau de bord (liste des incidents)
-- Figure 4 : incident critique (force brute) déplié avec réponse auto + bouton Annuler
-- Figure 5 : environnement (fenêtres Suricata + Wazuh + collecteur)
-- Figure 6 : un incident déplié montrant gravité + recommandation
+- Figure 4 : vue d'ensemble du tableau de bord (liste des incidents)
+- Figure 5 : incident critique (force brute) déplié avec réponse auto + bouton Annuler
+- Figure 6 : environnement (fenêtres Suricata + Wazuh + collecteur)
+- Figure 7 : un incident déplié montrant gravité + recommandation

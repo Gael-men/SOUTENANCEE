@@ -15,11 +15,14 @@ d'alertes (qui, dans WSL2, appartient a l'utilisateur systeme "wazuh").
 
 import subprocess
 
+from datetime import datetime
+
 from detection import detecter
 from decision import decider
 from response import execute
 from incidents import creer_incident
-from database import init_db, save_incident
+from database import (init_db, save_incident,
+                      trouver_incident_actif, incrementer_occurrence)
 from sources_reelles import lire_tous_les_evenements, CHEMIN_ALERTS_WAZUH
 
 
@@ -53,9 +56,24 @@ def executer_collecte_reelle():
     print(f"\n{len(evenements)} evenement(s) reel(s) collecte(s).\n")
 
     resultats = []
+    nb_regroupes = 0
     for evt in evenements:
         analyse = detecter(evt)
         choix = decider(analyse)
+
+        # Regroupement (memoire, section 2.3.4) : un evenement de meme
+        # nature qu'un incident encore actif incremente son compteur
+        # au lieu de creer une nouvelle ligne. Sans cela, relancer
+        # ce script relisait tout l'historique et dupliquait les
+        # incidents. Meme regle que dans demo_attaque.py et
+        # wazuh_temps_reel.py.
+        existant = trouver_incident_actif(
+            analyse["scenario"], analyse.get("description"), evt.get("source"))
+        if existant:
+            incrementer_occurrence(existant[0], datetime.now().isoformat())
+            nb_regroupes += 1
+            continue
+
         incident = creer_incident(analyse, choix)
 
         if choix["decision"] == "respond":
@@ -79,7 +97,9 @@ def executer_collecte_reelle():
     print("=== Resume de la collecte reelle ===")
     print(f"Evenements Suricata (reseau) : {nb_suricata}")
     print(f"Evenements Wazuh (hote)      : {nb_wazuh}")
-    print(f"Total traites                : {len(resultats)}")
+    print(f"Total traites                : {len(evenements)}")
+    print(f"Nouveaux incidents crees     : {len(resultats)}")
+    print(f"Evenements regroupes         : {nb_regroupes}")
     print(f"Reponses automatiques        : {nb_auto}")
     print(f"Alertes pour verif. humaine  : {nb_alert}")
 

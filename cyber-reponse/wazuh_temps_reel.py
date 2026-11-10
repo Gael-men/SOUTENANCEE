@@ -70,31 +70,46 @@ def reinitialiser_offset():
     _sauver_offset(_taille())
 
 
-def _classer_wazuh(regle):
-    """Traduit une regle Wazuh en (scenario, confiance brute)."""
+def _classer_wazuh(regle, texte_complet=""):
+    """Traduit une regle Wazuh en (scenario, confiance brute).
+
+    Meme classement que sources_reelles._classer_wazuh, pour que les
+    deux chemins de collecte donnent le meme resultat pour la meme
+    alerte (voir le rapport de concordance).
+    Corrections : "root" seul n'est plus teste en sous-chaine, sinon
+    le groupe "rootcheck" declenchait a tort un 0,95 critique pour
+    toutes les alertes rootcheck. "login" / "pam" seuls ne suffisent
+    plus a classer en force brute (une ouverture de session PAM
+    legitime n'est pas une attaque) : il faut un groupe
+    d'echec d'authentification explicite. Le journal complet
+    (full_log) est examine pour detecter un compte uid=0 / backdoor.
+    """
     niveau = regle.get("level", 0)
     texte = " ".join(regle.get("groups", []) or []).lower() + " " \
-        + (regle.get("description", "") or "").lower()
+        + (regle.get("description", "") or "").lower() + " " \
+        + (texte_complet or "").lower()
 
-    # Elevation de privileges / backdoor root (le plus grave)
-    if "uid=0" in texte or "privilege" in texte or "sudo" in texte \
-            or "root" in texte:
+    # Elevation de privileges / compte avec uid 0 / backdoor (le plus grave)
+    if "uid=0" in texte or "uid 0" in texte or "backdoor" in texte:
+        return "suspicious_process", 0.95
+    if "privilege" in texte or "sudo" in texte:
         return "suspicious_process", 0.95
     # Creation ou modification de compte
     if "adduser" in texte or "account_changed" in texte or "useradd" in texte \
             or "new user" in texte or "added to group" in texte \
-            or "group" in texte:
+            or "new group" in texte:
         return "suspicious_process", 0.80
     # Echec d'authentification (force brute cote machine)
     if "authentication_fail" in texte or "invalid_login" in texte \
-            or "authentication_failures" in texte or "login" in texte \
-            or "pam" in texte:
+            or "win_authentication_failed" in texte \
+            or "authentication_failures" in texte \
+            or "failed password" in texte:
         return "bruteforce", min(max(niveau / 15.0, 0.60), 0.99)
     # Integrite de fichiers
     if "syscheck" in texte:
         return "sensitive_file_change", min(max(niveau / 15.0, 0.60), 0.95)
     # Par defaut
-    return "suspicious_process", min(niveau / 15.0, 0.99)
+    return "suspicious_process", round(min(niveau / 15.0, 0.99), 2)
 
 
 def ingerer_wazuh(verbeux=False):
@@ -121,7 +136,7 @@ def ingerer_wazuh(verbeux=False):
         if regle.get("level", 0) < 3:   # ignore le bruit de fond
             continue
 
-        scenario, confiance = _classer_wazuh(regle)
+        scenario, confiance = _classer_wazuh(regle, enr.get("full_log", ""))
         source = enr.get("data", {}).get("srcip") \
             or enr.get("agent", {}).get("name", "hote-local")
         description = regle.get("description", "Alerte Wazuh")

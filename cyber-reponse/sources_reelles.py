@@ -25,10 +25,20 @@ champ "realite" (verite terrain), puisqu'on ne sait pas a l'avance si une
 alerte reelle est un vrai positif ou un faux positif. Ce champ est donc
 absent ici, ce qui est normal et conforme a une situation d'exploitation
 reelle.
+
+Corrections (memoire deja soumis, code aligne sur le memoire) :
+  - le ping est desormais collecte ici aussi (confiance 0,45, comme
+    dans demo_attaque.py et le Tableau 4 du memoire) ;
+  - le classement Wazuh est le MEME que dans wazuh_temps_reel.py
+    (plancher 0,60 pour l'authentification, 0,95 pour sudo /
+    privilege / uid=0 / backdoor, 0,80 pour la creation de compte),
+    pour qu'une meme alerte ne donne plus deux resultats differents
+    selon le chemin de collecte utilise.
 """
 
 import json
 import os
+import re
 
 # ---------------------------------------------------------------------------
 # Chemins par defaut des fichiers de logs des deux sources.
@@ -47,8 +57,8 @@ CHEMIN_ALERTS_WAZUH = "wazuh_alerts.json"
 # ---------------------------------------------------------------------------
 # Une alerte Suricata dont la signature contient l'un de ces mots-cles est
 # rattachee au scenario indique. Les alertes qui ne correspondent a aucun
-# mot-cle (ex: simple ping ICMP, requete DNS) sont considerees comme
-# purement informatives et NE generent PAS d'incident.
+# mot-cle (ex: requete DNS) sont considerees comme purement informatives
+# et NE generent PAS d'incident.
 MOTS_CLES_SURICATA = [
     ("telnet", "bruteforce"),
     ("ssh", "bruteforce"),
@@ -60,11 +70,18 @@ MOTS_CLES_SURICATA = [
     ("malware", "suspicious_process"),
     ("trojan", "suspicious_process"),
     ("shellcode", "suspicious_process"),
+    # Reconnaissance par ping : scenario 1 du Tableau 4 du memoire.
+    ("ping", "suspicious_process"),
+    ("icmp", "suspicious_process"),
 ]
 
 # Suricata note la gravite de 1 (la plus elevee) a 3 (la plus faible).
 # On la traduit en une confiance brute comparable a celle du simulateur.
 CONFIANCE_PAR_SEVERITE_SURICATA = {1: 0.95, 2: 0.80, 3: 0.62}
+
+# Confiance fixee pour le ping, comme dans demo_attaque.py :
+# 0,45 = gravite faible, alerte simple, aucune reponse automatique.
+CONFIANCE_PING = 0.45
 
 
 def _scenario_suricata(signature):
@@ -73,6 +90,13 @@ def _scenario_suricata(signature):
         if mot_cle in texte:
             return scenario
     return None  # alerte informative, ignoree
+
+
+def _confiance_suricata(signature, severite_suricata):
+    texte = (signature or "").lower()
+    if "ping" in texte or "icmp" in texte:
+        return CONFIANCE_PING
+    return CONFIANCE_PAR_SEVERITE_SURICATA.get(severite_suricata, 0.60)
 
 
 def lire_evenements_suricata(chemin=CHEMIN_EVE_SURICATA):
@@ -104,7 +128,7 @@ def lire_evenements_suricata(chemin=CHEMIN_EVE_SURICATA):
                 continue
 
             severite_suricata = alerte.get("severity", 3)
-            confiance_brute = CONFIANCE_PAR_SEVERITE_SURICATA.get(severite_suricata, 0.60)
+            confiance_brute = _confiance_suricata(signature, severite_suricata)
 
             evenements.append({
                 "scenario": scenario,
@@ -120,14 +144,44 @@ def lire_evenements_suricata(chemin=CHEMIN_EVE_SURICATA):
 # ---------------------------------------------------------------------------
 # WAZUH : correspondance groupe de regle -> scenario du prototype
 # ---------------------------------------------------------------------------
-def _scenario_wazuh(groupes):
-    texte = " ".join(groupes or []).lower()
+# Meme classement que wazuh_temps_reel._classer_wazuh, pour que les
+# deux chemins de collecte donnent le meme resultat pour la meme alerte.
+# Attention : "root" n'est pas teste seul en sous-chaine, sinon le mot
+# "rootcheck" (groupe Wazuh) declencherait a tort un 0,95 critique pour
+# toutes les alertes rootcheck. On ne retient que les cas caracterises :
+# uid=0, backdoor, sudo, privilege.
+def _classer_wazuh(regle, texte_complet=""):
+    niveau = regle.get("level", 0)
+    texte = " ".join(regle.get("groups", []) or []).lower() + " " \
+        + (regle.get("description", "") or "").lower() + " " \
+        + (texte_complet or "").lower()
+
+    # Elevation de privileges / compte avec uid 0 / backdoor (le plus grave)
+    if "uid=0" in texte or "uid 0" in texte or "backdoor" in texte:
+        return "suspicious_process", 0.95
+    if "privilege" in texte or "sudo" in texte:
+        return "suspicious_process", 0.95
+    # Creation ou modification de compte
+    if "adduser" in texte or "account_changed" in texte or "useradd" in texte \
+            or "new user" in texte or "added to group" in texte \
+            or "new group" in texte:
+        return "suspicious_process", 0.80
+    # Echec d'authentification (force brute cote machine)
     if "authentication_fail" in texte or "invalid_login" in texte \
-            or "win_authentication_failed" in texte or "authentication_failures" in texte:
-        return "bruteforce"
+            or "win_authentication_failed" in texte \
+            or "authentication_failures" in texte:
+        return "bruteforce", min(max(niveau / 15.0, 0.60), 0.99)
+    # Integrite de fichiers
     if "syscheck" in texte:
-        return "sensitive_file_change"
-    return "suspicious_process"
+        return "sensitive_file_change", min(max(niveau / 15.0, 0.60), 0.95)
+    # Par defaut : confiance derivee du niveau Wazuh, sans plancher.
+    return "suspicious_process", round(min(niveau / 15.0, 0.99), 2)
+
+
+def _scenario_wazuh(groupes):
+    """Compatibilite : scenario seul, sans la confiance."""
+    scenario, _confiance = _classer_wazuh({"level": 0, "groups": groupes or []})
+    return scenario
 
 
 def lire_evenements_wazuh(chemin=CHEMIN_ALERTS_WAZUH):
@@ -136,7 +190,8 @@ def lire_evenements_wazuh(chemin=CHEMIN_ALERTS_WAZUH):
     liste des evenements (au format du prototype).
 
     Wazuh note la gravite de ses regles de 0 a 15 (rule.level). On la
-    ramene a une confiance brute entre 0 et 1.
+    ramene a une confiance brute entre 0 et 1, avec les regles de
+    _classer_wazuh (voir ci-dessus).
     """
     evenements = []
     if not os.path.exists(chemin):
@@ -158,9 +213,8 @@ def lire_evenements_wazuh(chemin=CHEMIN_ALERTS_WAZUH):
             if niveau < 3:
                 continue
 
-            groupes = regle.get("groups", [])
-            scenario = _scenario_wazuh(groupes)
-            confiance_brute = round(min(niveau / 15.0, 0.99), 2)
+            scenario, confiance_brute = _classer_wazuh(
+                regle, enregistrement.get("full_log", ""))
 
             donnees = enregistrement.get("data", {})
             source = donnees.get("srcip") \
